@@ -1,0 +1,116 @@
+name: Build and Deploy Spring Boot App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up JDK 19
+      - name: Set up JDK 19
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '19'
+
+      # Grant execute permission for Gradle Wrapper
+      - name: Make Gradle Wrapper executable
+        run: chmod +x ./gradlew
+
+      # Cache Gradle packages
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Build the application with Gradle
+      - name: Build with Gradle (skip tests)
+        run: ./gradlew build -x test
+
+      # Set up Docker Buildx and Docker Compose in a single step
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Build and push Docker image
+      - name: Build and push Docker image
+        run: |
+          docker buildx build --platform linux/amd64 -t tanmay031/user-management-app:latest --push .
+        
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Transfer docker-compose.yml to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: ./docker-compose.yml
+          target: /home/ec2-user/my-app/
+          debug: true
+
+
+      - name: Print all environment variables
+        run: printenv
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # Navigate to the app directory
+            cd /home/ec2-user/my-app
+
+            # Print environment variables to verify
+            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+            echo "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}"
+            echo "SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}"
+
+            # Run docker-compose down and up with environment variables
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+            SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }} \
+            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }} \
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }} \
+            SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+            SPRING_PROFILES_ACTIVE=prod \
+            docker-compose down
+
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+            SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }} \
+            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }} \
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }} \
+            SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+            SPRING_PROFILES_ACTIVE=prod \
+            docker-compose up -d
+
+        

@@ -1,0 +1,32 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.0.2'
+	id 'io.spring.dependency-management' version '1.1.0'
+	id 'application'
+}
+
+group = 'com.tvm'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '19'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation('org.springframework.boot:spring-boot-starter-validation')
+	runtimeOnly 'org.postgresql:postgresql' // PostgreSQL dependency
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+application {
+	mainClass = 'com.tvm.usermanagement.UserManagementModuleApplication'
+}
