@@ -13,99 +13,133 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
+@RequestMapping("/api/users")
 public class UserController {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
+
     @Autowired
     private UserService userService;
+
     @Autowired
     private UserModelValidator userModelValidator;
 
+    /**
+     * Simple hello world endpoint for testing purposes.
+     */
     @GetMapping("/hello")
     public String helloWorld() {
-        return "sdsddddd!";
+        logger.info("Hello world endpoint hit.");
+        return "Hello, User Management API!";
     }
 
-    @PostMapping("/user")
+    /**
+     * Creates a new user.
+     */
+    @PostMapping
     public ResponseEntity<ApiResponse<UserModel>> createUser(@Valid @RequestBody UserModel userModel, BindingResult bindingResult) {
-        userModelValidator.validate(userModel, bindingResult);
-        if (bindingResult.hasErrors()) {
-            String errorMessage = ResponseUtil.getErrorMessage(bindingResult);
-            return ResponseUtil.createResponse(HttpStatus.BAD_REQUEST, errorMessage, 0,null);
-        }
+        logger.info("Creating a new user with username: {}", userModel.getUsername());
+
+        // Validate the user model
+        validateUserModel(userModel, bindingResult);
 
         String errorMessage = userService.checkUserExists(userModel);
         if (errorMessage != null) {
-            return ResponseUtil.createResponse(HttpStatus.CONFLICT, errorMessage, 0,null);
+            logger.warn("User creation failed: {}", errorMessage);
+            return ResponseUtil.createResponse(HttpStatus.CONFLICT, errorMessage, 0, null);
         }
 
         UserModel createdUser = userService.createUser(userModel);
-        return ResponseUtil.createResponse(HttpStatus.CREATED, "User created successfully",0, createdUser);
+        logger.info("User created successfully with ID: {}", createdUser.getId());
+        return ResponseUtil.createResponse(HttpStatus.CREATED, "User created successfully", 0, createdUser);
     }
 
-    @GetMapping("/users")
-    ResponseEntity<ApiResponse<List<UserModel>>> getAllUsers(@RequestParam(name = "offset", defaultValue = "0") int offset,
-                                                             @RequestParam(name = "pageSize", defaultValue = "10") int pageSize,
-                                                             @RequestParam(name = "sortBy", defaultValue = "id") String sortBy) {
-        List<UserModel> users = userService.getAllUsers();
-        Page<UserModel> usersWithPagination  = userService.getAllUsersByPagination(offset-1, pageSize,sortBy);
+    /**
+     * Retrieves all users with pagination and sorting.
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<UserModel>>> getAllUsers(
+            @RequestParam(name = "offset", defaultValue = "0") int offset,
+            @RequestParam(name = "pageSize", defaultValue = "10") int pageSize,
+            @RequestParam(name = "sortBy", defaultValue = "id") String sortBy) {
+        logger.info("Retrieving all users with pagination - offset: {}, pageSize: {}, sortBy: {}", offset, pageSize, sortBy);
 
-        return ResponseUtil.createResponse(HttpStatus.OK, "All users retrieved successfully.",users.size(), usersWithPagination.getContent());
+        // Get the total count of users in the database
+        long totalUsers = userService.getTotalUsersCount();
+
+        Page<UserModel> usersWithPagination = userService.getAllUsersByPagination(offset, pageSize, sortBy);
+        return ResponseUtil.createResponse(HttpStatus.OK, "All users retrieved successfully.",
+                (int) totalUsers, usersWithPagination.getContent());
     }
 
-    // Endpoint to get all users
-    @GetMapping("/all")
-    public ResponseEntity<List<UserModel>> getAllUsers() {
-        // Fetch all users
-        List<UserModel> users = userService.getAllUsers();
-
-        // Check if the list is empty and return appropriate status
-        if (users.isEmpty()) {
-            return new ResponseEntity<>(HttpStatus.NO_CONTENT); // 204 No Content
-        } else {
-            return new ResponseEntity<>(users, HttpStatus.OK); // 200 OK
-        }
-    }
-
-    @GetMapping("/user/{id}")
+    /**
+     * Retrieves a user by ID.
+     */
+    @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserModel>> getUserById(@PathVariable Long id) {
+        logger.info("Retrieving user with ID: {}", id);
+
         UserModel user = userService.getUserById(id);
         if (user != null) {
-            return ResponseUtil.createResponse(HttpStatus.OK, "User retrieved successfully.",0, user);
+            return ResponseUtil.createResponse(HttpStatus.OK, "User retrieved successfully.", 0, user);
         } else {
+            logger.warn("User not found with ID: {}", id);
             throw new UserNotFoundException("User not found with id " + id, HttpStatus.NOT_FOUND);
         }
     }
 
-    @PutMapping("/user/{id}")
-    public ResponseEntity<ApiResponse<UserModel>>  updateUser(@PathVariable Long id,@Valid  @RequestBody UserModel userModel,BindingResult bindingResult) {
-        userModelValidator.validate(userModel, bindingResult);
-        if (bindingResult.hasErrors()) {
-            String errorMessage = ResponseUtil.getErrorMessage(bindingResult);
-            return ResponseUtil.createResponse(HttpStatus.BAD_REQUEST, errorMessage, 0,null);
-        }
+    /**
+     * Updates an existing user.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserModel>> updateUser(@PathVariable Long id, @Valid @RequestBody UserModel userModel, BindingResult bindingResult) {
+        logger.info("Updating user with ID: {}", id);
+
+        // Validate the user model
+        validateUserModel(userModel, bindingResult);
 
         UserModel updatedUser = userService.updateUser(id, userModel);
         if (updatedUser == null) {
+            logger.warn("User not found with ID: {}", id);
             throw new UserNotFoundException("User not found with id " + id, HttpStatus.NOT_FOUND);
         }
 
-        return ResponseUtil.createResponse(HttpStatus.CREATED, "User updated successfully",0, updatedUser);
+        logger.info("User updated successfully with ID: {}", id);
+        return ResponseUtil.createResponse(HttpStatus.OK, "User updated successfully", 0, updatedUser);
     }
 
-    @DeleteMapping("/user/{id}")
-    public ResponseEntity<ApiResponse<UserModel>>  deleteUser(@PathVariable Long id) {
+    /**
+     * Deletes a user by ID.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserModel>> deleteUser(@PathVariable Long id) {
+        logger.info("Deleting user with ID: {}", id);
+
         UserModel userModel = userService.getUserById(id);
-        if (userModel == null ) {
+        if (userModel == null) {
+            logger.warn("User not found with ID: {}", id);
             throw new UserNotFoundException("User not found with id " + id, HttpStatus.NOT_FOUND);
         }
 
         userService.deleteUser(id);
-        return ResponseUtil.createResponse(HttpStatus.OK, "User with id " + id + " has been deleted successfully.",0, userModel);
+        logger.info("User with ID: {} has been deleted successfully.", id);
+        return ResponseUtil.createResponse(HttpStatus.OK, "User with ID " + id + " has been deleted successfully.", 0, userModel);
     }
 
-
+    // Helper method for user model validation
+    private void validateUserModel(UserModel userModel, BindingResult bindingResult) {
+        userModelValidator.validate(userModel, bindingResult);
+        if (bindingResult.hasErrors()) {
+            String errorMessage = ResponseUtil.getErrorMessage(bindingResult);
+            logger.warn("Validation failed: {}", errorMessage);
+            throw new IllegalArgumentException(errorMessage);
+        }
+    }
 }
