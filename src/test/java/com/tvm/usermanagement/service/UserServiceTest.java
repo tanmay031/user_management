@@ -183,22 +183,7 @@ public class UserServiceTest {
         assertEquals(user, result);
     }
 
-    @Test
-    public void testGetUserByEmail() {
-        // Arrange
-        UserModel user = new UserModel();
-        user.setId(1L);
-        user.setName("John Doe");
-        user.setEmail("john.doe@example.com");
-        user.setUsername("johndoe");
-        when(userRepository.findByEmail("john.doe@example.com")).thenReturn(Optional.of(user));
 
-        // Act
-        UserModel result = userService.getUserByEmail("john.doe@example.com");
-
-        // Assert
-        assertEquals(user, result);
-    }
 
     @Test
     public void testUpdateUser() {

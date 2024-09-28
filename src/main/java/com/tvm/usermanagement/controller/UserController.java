@@ -5,7 +5,6 @@ import com.tvm.usermanagement.exception.UserNotFoundException;
 import com.tvm.usermanagement.model.UserModel;
 import com.tvm.usermanagement.service.UserService;
 import com.tvm.usermanagement.util.ResponseUtil;
-import com.tvm.usermanagement.validation.UserModelValidator;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -28,18 +27,6 @@ public class UserController {
     @Autowired
     private UserService userService;
 
-    @Autowired
-    private UserModelValidator userModelValidator;
-
-    /**
-     * Simple hello world endpoint for testing purposes.
-     */
-    @GetMapping("/hello")
-    public String helloWorld() {
-        logger.info("Hello world endpoint hit.");
-        return "Hello, User Management API!";
-    }
-
     /**
      * Creates a new user.
      */
@@ -47,14 +34,15 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserModel>> createUser(@Valid @RequestBody UserModel userModel, BindingResult bindingResult) {
         logger.info("Creating a new user with username: {}", userModel.getUsername());
 
-        // Validate the user model
-        validateUserModel(userModel, bindingResult);
-
-        String errorMessage = userService.checkUserExists(userModel);
-        if (errorMessage != null) {
+        // Check for validation errors
+        if (bindingResult.hasErrors()) {
+            String errorMessage = ResponseUtil.getErrorMessage(bindingResult);
             logger.warn("User creation failed: {}", errorMessage);
-            return ResponseUtil.createResponse(HttpStatus.CONFLICT, errorMessage, 0, null);
+            return ResponseUtil.createResponse(HttpStatus.BAD_REQUEST, errorMessage, 0, null);
         }
+
+        userService.checkUserExists(userModel);
+
 
         UserModel createdUser = userService.createUser(userModel);
         logger.info("User created successfully with ID: {}", createdUser.getId());
@@ -71,12 +59,9 @@ public class UserController {
             @RequestParam(name = "sortBy", defaultValue = "id") String sortBy) {
         logger.info("Retrieving all users with pagination - offset: {}, pageSize: {}, sortBy: {}", offset, pageSize, sortBy);
 
-        // Get the total count of users in the database
         long totalUsers = userService.getTotalUsersCount();
-
         Page<UserModel> usersWithPagination = userService.getAllUsersByPagination(offset, pageSize, sortBy);
-        return ResponseUtil.createResponse(HttpStatus.OK, "All users retrieved successfully.",
-                (int) totalUsers, usersWithPagination.getContent());
+        return ResponseUtil.createResponse(HttpStatus.OK, "All users retrieved successfully.", (int) totalUsers, usersWithPagination.getContent());
     }
 
     /**
@@ -91,7 +76,7 @@ public class UserController {
             return ResponseUtil.createResponse(HttpStatus.OK, "User retrieved successfully.", 0, user);
         } else {
             logger.warn("User not found with ID: {}", id);
-            throw new UserNotFoundException("User not found with id " + id, HttpStatus.NOT_FOUND);
+            throw new UserNotFoundException("User not found with id " + id);
         }
     }
 
@@ -102,13 +87,19 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserModel>> updateUser(@PathVariable Long id, @Valid @RequestBody UserModel userModel, BindingResult bindingResult) {
         logger.info("Updating user with ID: {}", id);
 
-        // Validate the user model
-        validateUserModel(userModel, bindingResult);
+        // Check for validation errors
+        if (bindingResult.hasErrors()) {
+            String errorMessage = ResponseUtil.getErrorMessage(bindingResult);
+            logger.warn("Validation failed: {}", errorMessage);
+            return ResponseUtil.createResponse(HttpStatus.BAD_REQUEST, errorMessage, 0, null);
+        }
+
+        userService.checkUserExists(userModel);
 
         UserModel updatedUser = userService.updateUser(id, userModel);
         if (updatedUser == null) {
             logger.warn("User not found with ID: {}", id);
-            throw new UserNotFoundException("User not found with id " + id, HttpStatus.NOT_FOUND);
+            throw new UserNotFoundException("User not found with id " + id);
         }
 
         logger.info("User updated successfully with ID: {}", id);
@@ -125,21 +116,11 @@ public class UserController {
         UserModel userModel = userService.getUserById(id);
         if (userModel == null) {
             logger.warn("User not found with ID: {}", id);
-            throw new UserNotFoundException("User not found with id " + id, HttpStatus.NOT_FOUND);
+            throw new UserNotFoundException("User not found with id " + id);
         }
 
         userService.deleteUser(id);
         logger.info("User with ID: {} has been deleted successfully.", id);
         return ResponseUtil.createResponse(HttpStatus.OK, "User with ID " + id + " has been deleted successfully.", 0, userModel);
-    }
-
-    // Helper method for user model validation
-    private void validateUserModel(UserModel userModel, BindingResult bindingResult) {
-        userModelValidator.validate(userModel, bindingResult);
-        if (bindingResult.hasErrors()) {
-            String errorMessage = ResponseUtil.getErrorMessage(bindingResult);
-            logger.warn("Validation failed: {}", errorMessage);
-            throw new IllegalArgumentException(errorMessage);
-        }
     }
 }

@@ -19,10 +19,23 @@ public class UserModel {
     @NotEmpty(message = "Username is required")
     private String username;
 
+    @NotEmpty(message = "Name is required")
     private String name;
 
     @Email(message = "Invalid email address")
+    @NotEmpty(message = "Email is required")
     private String email;
+
+    // Default constructor
+    public UserModel() {
+    }
+
+    // Parameterized constructor
+    public UserModel(String username, String name, String email) {
+        this.username = username;
+        this.name = name;
+        this.email = email;
+    }
 
     // Getters and Setters
     public Long getId() {
