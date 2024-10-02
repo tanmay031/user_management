@@ -43,7 +43,7 @@ For a detailed step-by-step guide on deploying a Spring Boot application with Po
 
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/your-repository.git
+git clone https://github.com/tanmay031/user_management.git
 cd user_management
 ```
 
@@ -80,15 +80,17 @@ The project uses GitHub Actions to automate the deployment process to an EC2 ins
 
 #### GitHub Actions
 1. **CI/CD Pipeline:** GitHub Actions is configured to build, test, and deploy the application automatically on push to the main branch.
-2. **Configuration:** The GitHub Actions workflow is defined in `.github/workflows/deploy.yml`.
+2. **Configuration:** The GitHub Actions workflow is defined in `.github/workflows/build-and-deploy.yml`.
 
 #### EC2 Deployment
 1. **EC2 Setup:** Ensure your EC2 instance has Docker installed and ports 80 (HTTP) and 8080 are open.
 2. **SSH Access:** The GitHub Actions workflow requires SSH access to the EC2 instance to deploy the Dockerized application.
 3. **Deployment:** On every push to the main branch, GitHub Actions will:
-   - Build the Docker image.
-   - Push the Docker image to your EC2 instance.
-   - Restart the Docker container on the EC2 instance to run the new version.
+  - On push to the main branch: Trigger the workflow whenever changes are pushed to the main branch.
+  - Build the Docker image: Build the Docker image and tag it with the current Git commit SHA for versioning.
+  - Push the Docker image to Docker Hub: Push the built Docker image to Docker Hub.
+  - Connect to the EC2 instance: Use SSH to connect to the EC2 instance.
+  - Use Docker Compose on EC2: Pull the latest Docker image from Docker Hub and restart the container using docker-compose.
 
 ### API Endpoints
 - **POST** `/api/users` - Create a new user.
